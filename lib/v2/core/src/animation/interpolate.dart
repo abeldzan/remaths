@@ -7,9 +7,12 @@ double _interpolate(
   Extrapolate extrapolate = Extrapolate.extend,
   Extrapolate? rightExtrapolate,
 }) {
-  var val = getValue(value);
-  var input = inputRange.map((e) => getValue(e)).toList();
-  var output = outputRange.map((e) => getValue(e)).toList();
+  final val = getValue(value).toDouble();
+
+  // Convert ranges to numeric lists once to avoid repeated allocations.
+  final input = inputRange.map((e) => getValue(e).toDouble()).toList();
+  final output = outputRange.map((e) => getValue(e).toDouble()).toList();
+
   assert(
     input.length == output.length,
     "The length of inputRange must be equal to the outputRange",
@@ -18,27 +21,28 @@ double _interpolate(
     input.length > 1,
     "The length of the input must be 2 or more",
   );
-  var sorted = [...input];
-  sorted.sort((a, b) => a.compareTo(b));
-  assert(listEquals(sorted, input), "Increasing error");
 
-  double singleInterpolate(val_, input_, output_, offset) {
-    var inS = input_[offset];
-    var inE = input_[offset + 1];
-    var outS = output_[offset];
-    var outE = output_[offset + 1];
-    var progress = (val_ - inS) / (inE - inS);
-    var resultForNonZeroRange = outS + (progress * (outE - outS));
-    return cond(
-        inS == inE, cond(val_ <= inS, outS, outE), resultForNonZeroRange);
+  // Ensure input is non-decreasing without allocating a sorted copy.
+  for (var i = 1; i < input.length; i++) {
+    assert(input[i] >= input[i - 1], "Increasing error");
   }
 
-  var left = extrapolate;
-  var right = (defined(rightExtrapolate) ? rightExtrapolate : extrapolate)!;
+  double singleInterpolate(double val_, List<double> input_, List<double> output_, int offset) {
+    final inS = input_[offset];
+    final inE = input_[offset + 1];
+    final outS = output_[offset];
+    final outE = output_[offset + 1];
+    if (inS == inE) return cond(val_ <= inS, outS, outE);
+    final progress = (val_ - inS) / (inE - inS);
+    return outS + (progress * (outE - outS));
+  }
+
+  final left = extrapolate;
+  final right = (defined(rightExtrapolate) ? rightExtrapolate : extrapolate)!;
 
   var index = 0;
   if (val < input.first) {
-    // do nothing
+    // leave index = 0
   } else if (val > input.last) {
     index = input.length - 2;
   } else {
@@ -47,21 +51,23 @@ double _interpolate(
       if (input[i] > val) break;
     }
   }
+
   var res = singleInterpolate(val, input, output, index);
 
   if (left != Extrapolate.extend) {
-    res = left == Extrapolate.clamp
-        ? cond(val < input.first, output.first, res)
-        : left == Extrapolate.identity
-            ? res = cond(val < input.first, val, res)
-            : res;
+    if (left == Extrapolate.clamp) {
+      res = cond(val < input.first, output.first, res);
+    } else if (left == Extrapolate.identity) {
+      res = cond(val < input.first, val, res);
+    }
   }
+
   if (right != Extrapolate.extend) {
-    res = right == Extrapolate.clamp
-        ? cond(val > input.last, output.last, res)
-        : right == Extrapolate.identity
-            ? res = cond(val > input.last, val, res)
-            : res;
+    if (right == Extrapolate.clamp) {
+      res = cond(val > input.last, output.last, res);
+    } else if (right == Extrapolate.identity) {
+      res = cond(val > input.last, val, res);
+    }
   }
 
   return res;
@@ -72,25 +78,27 @@ _interpolateColor(
   List<dynamic> inputRange,
   List<Color> outputRange,
 ) {
-  var reds = outputRange.map((e) => e.red).toList();
-  var greens = outputRange.map((e) => e.green).toList();
-  var blues = outputRange.map((e) => e.blue).toList();
-  var alpha = outputRange.map((e) => e.alpha).toList();
+  // Build component lists once (faster than multiple map calls per channel).
+  final len = outputRange.length;
+  final reds = List<int>.generate(len, (i) => outputRange[i].red);
+  final greens = List<int>.generate(len, (i) => outputRange[i].green);
+  final blues = List<int>.generate(len, (i) => outputRange[i].blue);
+  final alphas = List<int>.generate(len, (i) => outputRange[i].alpha);
 
-  getValue(List<dynamic> outputs, [List<dynamic>? input]) {
+  int getComponent(List<int> components) {
     return _interpolate(
       value,
-      input ?? inputRange,
-      outputs,
+      inputRange,
+      components,
       extrapolate: Extrapolate.clamp,
     ).round();
   }
 
   return Color.fromARGB(
-    getValue(alpha),
-    getValue(reds),
-    getValue(greens),
-    getValue(blues),
+    getComponent(alphas),
+    getComponent(reds),
+    getComponent(greens),
+    getComponent(blues),
   );
 }
 
@@ -101,10 +109,16 @@ Offset _interpolateOffset(
   Extrapolate extrapolate = Extrapolate.extend,
   Extrapolate? rightExtrapolate,
 }) {
+  // Prepare separate numeric lists for x/y once to avoid duplicate mapping.
+  final inputXs = inputRange.map((e) => e.dx).toList();
+  final outputXs = outputRange.map((e) => e.dx).toList();
+  final inputYs = inputRange.map((e) => e.dy).toList();
+  final outputYs = outputRange.map((e) => e.dy).toList();
+
   return Offset(
-    _interpolate(value.dx, inputRange.map((e) => e.dx).toList(),
-        outputRange.map((e) => e.dx).toList()),
-    _interpolate(value.dy, inputRange.map((e) => e.dy).toList(),
-        outputRange.map((e) => e.dy).toList()),
+    _interpolate(value.dx, inputXs, outputXs,
+        extrapolate: extrapolate, rightExtrapolate: rightExtrapolate),
+    _interpolate(value.dy, inputYs, outputYs,
+        extrapolate: extrapolate, rightExtrapolate: rightExtrapolate),
   );
 }
