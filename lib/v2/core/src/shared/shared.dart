@@ -27,14 +27,24 @@ abstract class Shared {
   }
 
   _resetController(int? duration) {
+    // Avoid disposing and recreating the controller to reduce overhead.
+    // Just stop current animation and update duration.
     _stopCurrent();
-    controller.dispose();
-    controller = AnimationController(
-      vsync: vsync,
-      duration: Duration(
+    try {
+      controller.duration = Duration(
         milliseconds: duration ?? _kDuration,
-      ),
-    );
+      );
+      controller.reset();
+    } catch (e) {
+      // Fallback to recreating the controller if it's already disposed for
+      // some reason (defensive).
+      controller = AnimationController(
+        vsync: vsync,
+        duration: Duration(
+          milliseconds: duration ?? _kDuration,
+        ),
+      );
+    }
   }
 
   _statusListener(AnimationStatus status) {
