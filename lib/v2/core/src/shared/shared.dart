@@ -14,7 +14,6 @@ abstract class Shared {
   bool _sequenceLocked = false;
   void Function()? _onComplete;
   late _AnimationInfo _meta;
-  bool _isDisposed = false;
 
   Shared(this._val, {required this.vsync}) {
     _notifier = ValueNotifier(_val);
@@ -28,34 +27,14 @@ abstract class Shared {
   }
 
   _resetController(int? duration) {
-    // Avoid disposing and recreating the controller to reduce overhead.
-    // Just stop current animation and update duration.
-    // If the controller was disposed, recreate it. Track disposed state to
-    // avoid relying on exceptions for control flow.
     _stopCurrent();
-
-    if (_isDisposed) {
-      controller = AnimationController(
-        vsync: vsync,
-        duration: Duration(milliseconds: duration ?? _kDuration),
-      );
-      _isDisposed = false;
-    }
-
-    // Update duration in place when possible to avoid allocation.
-    controller.duration = Duration(milliseconds: duration ?? _kDuration);
-
-    // Reset and prepare the controller for use. If the controller has been
-    // disposed unexpectedly, recreate as a defensive fallback.
-    try {
-      controller.reset();
-    } catch (e) {
-      controller = AnimationController(
-        vsync: vsync,
-        duration: Duration(milliseconds: duration ?? _kDuration),
-      );
-      _isDisposed = false;
-    }
+    controller.dispose();
+    controller = AnimationController(
+      vsync: vsync,
+      duration: Duration(
+        milliseconds: duration ?? _kDuration,
+      ),
+    );
   }
 
   _statusListener(AnimationStatus status) {
@@ -67,18 +46,9 @@ abstract class Shared {
   }
 
   _setAnimation(Animation<double> animation, [void Function()? onComplete]) {
-    // Remove any previous listeners before attaching new ones to avoid leaks.
     _meta.removeListener();
     _meta.animation = animation;
-
-    // Use a local function that avoids capturing outer scope variables
-    // unnecessarily. This reduces closure allocations when this method is
-    // called frequently.
-    void _localListener() {
-      _setValue(animation.value);
-    }
-
-    _meta.listener = _localListener;
+    _meta.listener = () => _setValue(animation.value);
     _onComplete = onComplete;
     _meta.animation?.addStatusListener(_statusListener);
     _meta.animation!.addListener(_meta.listener!);
@@ -133,20 +103,12 @@ abstract class Shared {
 
   dispose() {
     _stopCurrent();
-    // Track disposed state so _resetController can avoid relying on
-    // exceptions as control flow and know to recreate the controller later.
-    try {
-      controller.dispose();
-    } finally {
-      _isDisposed = true;
-    }
+    controller.dispose();
     _notifier.dispose();
   }
 
   @protected
   _stopCurrent() {
-    // Stopping a disposed controller can throw; guard against that.
-    if (_isDisposed) return;
     controller.stop();
   }
 }

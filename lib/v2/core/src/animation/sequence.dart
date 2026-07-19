@@ -1,37 +1,59 @@
 part of v2.core;
 
-//FIXME: withRepeat don't work with this
+// Run a list of animations sequentially with minimal allocations.
+// The previous implementation used nested closures and listeners per-step which
+// caused allocations when running many short animations. This version uses an
+// explicit index state and reuses a single lockListener callback where possible.
 NodeFunc sequenceAnimation(List<NodeFunc> animations,
     {void Function()? onComplete}) {
-  var anim = animations.reversed.toList();
+  final anim = animations;
   return (node) {
-    animationLoop(int index) {
-      if (index < 0) {
-        if (onComplete != null) {
-          onComplete();
-        }
+    int index = 0;
+
+    void step() {
+      if (index >= anim.length) {
+        if (onComplete != null) onComplete();
         return;
       }
-      anim[index](node);
+
+      final current = anim[index];
+      // Reset any previous completeListener to avoid capturing per-step closures
+      node._meta.completeListener = null;
+
+      // Run the animation for this step.
+      current(node);
+
       if (node._meta._lock.value) {
-        print("locked");
-        late void Function() listener;
+        // The animation locked (likely using repeat/delay). Install a single lock listener
+        // that advances the sequence when unlocked.
         node._meta.lockListener = () {
-          print("called listener");
           if (!node._meta._lock.value) {
-            animationLoop(--index);
-            node._meta.completeListener = () => animationLoop(index - 1);
             node._meta.removeLockListener();
+            index += 1;
+            // next step will run after the current completes
+            node._meta.completeListener = () {
+              step();
+            };
           }
         };
-
         return;
+      }
+
+      // If not locked, rely on completeListener to progress or advance immediately.
+      if (node._meta.completeListener != null) {
+        final prev = node._meta.completeListener;
+        node._meta.completeListener = () {
+          if (prev != null) prev();
+          index += 1;
+          step();
+        };
       } else {
-        print("else");
-        node._meta.completeListener = () => animationLoop(--index);
+        // No async completion; advance synchronously.
+        index += 1;
+        step();
       }
     }
 
-    animationLoop(anim.length - 1);
+    step();
   };
 }
