@@ -2,6 +2,9 @@
 import '../core/core.dart';
 import 'dart:math' as math;
 
+// Reusable Random instance to avoid allocating a new Random on every call.
+final math.Random _random = math.Random();
+
 double getValue(dynamic data) {
   assert(
     data is SharedValue || data is num || data is double,
@@ -24,7 +27,7 @@ double sub(dynamic a, dynamic b) => (getValue(a) - getValue(b)).toDouble();
 double pow(dynamic a, dynamic b) =>
     (math.pow(getValue(a), getValue(b))).toDouble();
 
-double sqrt(dynamic a) => math.sqrt(a);
+double sqrt(dynamic a) => math.sqrt(getValue(a));
 
 double modulo(dynamic a, dynamic b) =>
     (((getValue(a) % getValue(b)) + getValue(b)) % getValue(b)).toDouble();
@@ -91,36 +94,39 @@ bool lessOrEq(a, b) => getValue(a) <= getValue(b);
 bool greaterOrEq(a, b) => getValue(a) >= getValue(b);
 
 double decimalRound(dynamic a, dynamic dec) {
-  assert(greaterOrEq(dec, 0), "decimal must be 0 or greater");
-  if (getValue(dec) == 0) return dec.toDouble();
-  var r = multiply(10, pow(10, getValue(dec) - 1));
-  return divide(round(multiply(a, r)), r);
+  final aVal = getValue(a);
+  final decVal = getValue(dec).toInt();
+  assert(decVal >= 0, "decimal must be 0 or greater");
+  if (decVal == 0) return aVal.round().toDouble();
+  final factor = math.pow(10, decVal).toDouble();
+  return (aVal * factor).round() / factor;
 }
 
 double random([int start = 0, int end = 1, int decimal = 1]) {
-  var rnd = math.Random();
-  var min = cond(lessThan(start, end), start, end);
-  var max = cond(lessThan(start, end), end, start);
-  return decimalRound(
-          add(cond(min == 0, 0, add(min, rnd.nextInt(sub(max, min).toInt()))),
-              rnd.nextDouble()),
-          decimal)
-      .toDouble();
+  final minV = math.min(start, end);
+  final maxV = math.max(start, end);
+  if (minV == maxV) return decimalRound(minV.toDouble(), decimal);
+  final value = _random.nextDouble() * (maxV - minV) + minV;
+  return decimalRound(value, decimal);
 }
 
 List<num> range(dynamic stop, {dynamic start = 0, dynamic step = 1}) {
-  var stop_ = round(getValue(stop));
-  var start_ = round(getValue(start));
-  var step_ = round(getValue(step));
-  assert(step_ >= 0, "step cannot be 0 or less");
+  final start_ = getValue(start).toInt();
+  final stop_ = getValue(stop).toInt();
+  final step_ = getValue(step).toInt();
+  assert(step_ != 0, "step cannot be 0");
 
-  return cond(
-      start_ < stop_ && step_ > 0,
-      List<int>.generate(
-        ((start_ - stop_) / step_).abs().ceil(),
-        (int i) => start_ + (i * step_),
-      ),
-      []);
+  final result = <num>[];
+  if (step_ > 0) {
+    for (var i = start_; i < stop_; i += step_) {
+      result.add(i);
+    }
+  } else {
+    for (var i = start_; i > stop_; i += step_) {
+      result.add(i);
+    }
+  }
+  return result;
 }
 
 T call<T>(T Function() func) {
