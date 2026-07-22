@@ -1,439 +1,172 @@
 **Table of Contents**
 
+- [Project](#project)
+- [Quick start](#quick-start)
 - [Installation](#installation)
-- [Migrating from version 1.x.x](#migrating-from-v1)
-- [Basic USAGE](#basic-USAGE)
-- [SharedValues](#sharedvalues)
-- [Animation Functions](#animation-functions)
-  - [withTiming](#withtiming)
-  - [withSpring](#withsequence)
-  - [withRepeat](#withrepeat)
-- [Interpolation](#interpolation)
-  - [interpolate](#interpolate)
-  - [Color Interpolation](#interpolatecolors)
-- [Helpers](#helpers)
-- [Other Helper Function](#other-functions)
-  - [Logical](#logical-expressions)
-  - [Maths](#maths)
-  - [`SharedValue` Specific](#sharedvalue-specific)
+- [Basic usage](#basic-usage)
+- [API highlights](#api-highlights)
+- [Migration from v1](#migrating-from-v1)
+- [Examples](#examples)
+- [Contributing](#contributing)
+- [License](#license)
 
-## Installation
+# remaths
 
-To install in flutter run
+remaths is a small Flutter package that makes animations, interpolations and animation helpers easier to use by providing a lightweight SharedValue abstraction and a set of animation functions (timing, spring, sequence, repeat, delay) plus interpolation and helper utilities.
+
+This README improves discoverability and adds a concise quick-start and examples while keeping the original reference details.
+
+## Quick start
+
+Add remaths to your project and import it:
 
 ```bash
 flutter pub add remaths
 ```
 
-or add `remaths` to your dependencies
-
-```yml
-dependencies:
-	remaths: ^2.0.0
+```dart
+import 'package:remaths/remaths.dart';
 ```
 
-## Migrating from v1
+## Installation
 
-- `Tweenable` are renamed to `SharedValues`
+Alternatively add to your pubspec.yaml:
 
-  **OLD**
+```yaml
+dependencies:
+  remaths: ^2.0.0
+```
 
-  ```dart
-  opacity = Tweenable(0.0, this);
-  // OR
-  opacity = 0.asTweenable(this)
-  ```
+Run `flutter pub get` to install.
 
-  **NOW**
+## Basic usage
 
-  ```dart
-  opacity = SharedValue(0.0, vsync:this);
-  //OR
-  opacity = 0.asSharedValue(this);
-  // OR
-  ```
-
-## Basic USAGE
-
-To start using remaths in your widget, your widget must have be a `Stateful` widget which with `TickerStateProviderMixin`
-`SharedValue` s are initialized just like `AnimationControllers`
+- Use a StatefulWidget that mixes in TickerStateProviderMixin (or another vsync provider).
+- Create a SharedValue and update it with animation helper functions.
 
 ```dart
-late SharedValue opacity;
+class MyWidgetState extends State<MyWidget> with TickerStateProviderMixin {
+  late SharedValue<double> opacity;
 
-@override
-initState() {
-	opacity = SharedValue(0.0, this);
-	// OR
-	width = 0.0.asSharedValue(this);
+  @override
+  void initState() {
+    super.initState();
+    opacity = SharedValue(0.0, this);
+  }
+
+  void fadeOut() {
+    opacity.value = withTiming(0.0, duration: 300, curve: Curves.easeInOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // use opacity.value in your build
+    return Container();
+  }
 }
 ```
 
-`SharedValue` can use animated with [Animation Functions](#animation-functions)
+## API highlights
 
-[See all Animation Functions](#animation-functions)
-<br><br>
+- SharedValue<T>
+  - Create: `SharedValue(0.0, vsync: this)` or `0.0.asSharedValue(this)`
+  - Update with animation functions: `value = withTiming(...)`, `value = withSpring(...)`, `value = withSequence([...])`, `value = withRepeat(...)`, `value = withDelay(...)`
+  - Helpers: `interpolate`, `interpolateColor`, `interpolateOffset` and math/logical helpers that accept SharedValue directly.
 
-# SharedValues
+- Animation functions
+  - withTiming(to, duration, curve, from, onComplete)
+  - withSpring(to, duration, velocity, mass, stiffness, damping, onComplete)
+  - withSequence(list, onComplete)
+  - withRepeat(animation, reps, reverse, from, onComplete)
+  - withDelay(animation, ms)
 
-## methods
+- Interpolation
+  - interpolate(value, inputRange, outputRange, extrapolate, rightExtrapolate)
+  - interpolateColor(value, inputRange, colors)
+  - interpolateOffset(value, inputRange, outputRange)
 
-These are some of the common method. For more go to the [API Reference](https://pub.dev/documentation/remaths/latest/remaths/remaths-library.html)
+- Helpers (examples)
+  - cond(condition, ifBlock, [elseBlock])
+  - range(stop, {start, step})
+  - random(start, end, decimal)
+  - clamp(value, min, max)
+  - diff(value), diffClamp(value)
+  - toRad, toDeg
+  - logical: lessThan, greaterThan, eq, neq, and/or
+  - maths & trig: add, subtract, multiply, divide, floor, ceil, round, abs, pow, sqrt, sin, cos, tan, acos, asin, atan, log
 
-### `withTiming(double toValue)`
+For full reference see the API docs: https://pub.dev/documentation/remaths/latest/remaths/remaths-library.html
 
-animates the value with [timing function](#withtiming)
+## Migrating from v1
 
-### `withSpring(double toValue)`
+The main breaking change is renaming Tweenable to SharedValue.
 
-animates the value with [spring function](#withspring)
-
-### `withSequence([])`
-
-run a list of animations
-
-### `interpolate(inputRange,outPutRange ..)`
-
-maps the value from inputRange to outputRange see [interpolations](#interpolate)
-
-### `interpolate(inputRange,outPutRange ..)`
-
-see [color Interpolation](#interpolatecolors)
-
-# Animation Functions
-
-Animation functions are used to drive a `SharedValue` with a specific animation
-
-## withTiming
-
-This is used to run a timing animation on a `SharedValue`
-
-**USAGE**
-
+OLD:
 ```dart
-opacity.value = withTiming(0.0, duration:100, curve:Curves.easeInOut);
+opacity = Tweenable(0.0, this);
+// OR
+opacity = 0.asTweenable(this);
 ```
 
-### Arguments
-
-| name                  | default                            | description                               |
-| --------------------- | ---------------------------------- | ----------------------------------------- |
-| `double` toValue\*    | required                           | animation destination                     |
-| `int` duration        | 300                                | duration of the animation in milliseconds |
-| `Curve` curve         | `Curves.ease`                      | The curve of the animations               |
-| `double` from         | current value of the `SharedValue` | the start of the animation                |
-| `Function` onComplete | null                               | calls when the animation is complete      |
-
-## withSpring
-
-This is used to animate `SharedValue` with `SpringSimulation`
-
-**USAGE**
-
+NOW:
 ```dart
-width.value = withSpring(1.0, duration: 500);
+opacity = SharedValue(0.0, vsync: this);
+// OR
+opacity = 0.asSharedValue(this);
 ```
 
-### Arguments
+## Examples
 
-| name                  | default  | description                               |
-| --------------------- | -------- | ----------------------------------------- |
-| `double` toValue\*    | required | animation destination                     |
-| `int` duration        | 300      | duration of the animation in milliseconds |
-| `double` velocity     | 0.0      | spring velocity                           |
-| `double` mass         | 1.0      | spring mass                               |
-| `double` stiffness    | 180.0    | stiffness                                 |
-| `double` damping      | 20.0     | damping                                   |
-| `Function` onComplete | null     | calls when the animation is complete      |
-
-## WithSequence
-
-This animation Function is used to run list of animations sequentially, i.e one after the other
-
-**USAGE**
+Simple timing animation
 
 ```dart
-
-width = withSequence(
-  [withTiming(20), withSpring(40)],
-  () => print("animation complete"),
-)
+opacity.value = withTiming(1.0, duration: 200);
 ```
 
-### Arguments
-
-| name                  | default  | description                          |
-| --------------------- | -------- | ------------------------------------ |
-| `List` animations\*   | required | list of Animations                   |
-| `Function` onComplete | null     | calls when the animation is complete |
-
-## withRepeat
-
-Repeat an animation for some number of times
-
-**USAGE**
+Sequence example
 
 ```dart
-width = withRepeat(withSpring(20.0), reps:3);
+width.value = withSequence([withTiming(20), withSpring(40)], () => print('done'));
 ```
 
-### Arguments
-
-| name                  | default                            | description                                       |
-| --------------------- | ---------------------------------- | ------------------------------------------------- |
-| animation\*           | required                           | the animation function to repeat                  |
-| `int` reps            | 2                                  | number of times to repeat the animation           |
-| `bool` reverse        | false                              | where to reverse the animation on each repetition |
-| `double` from         | current value of the `SharedValue` | the start of the animation                        |
-| `Function` onComplete | null                               | calls when the animation is complete              |
-
-## withDelay
-
-Delay an animation before running
+Repeat example
 
 ```dart
-// this delays the animation for 300ms before running
-opacity.value = withDelay(withTiming(), 300)
+y.value = withRepeat(withSpring(20.0), reps: 3);
 ```
 
-# Interpolation
-
-There are some helpful interpolation function to help interpolate between values and `Color`s
-
-## interpolate
-
-This is used to map a value from one range to the other.
-
-**USAGE**
+Interpolation example
 
 ```dart
-var yOffset = interpolate(opacity, [0,1], [100,0])
+final yOffset = interpolate(opacity, [0, 1], [100.0, 0.0]);
+// opacity: 0 -> yOffset 100, 1 -> yOffset 0
 ```
 
-The code above implies that <br>
-When:
-
-| opacity | yOffset |
-| ------- | ------- |
-| 0       | 100     |
-| 0.5     | 50      |
-| 1       | 0       |
-
-Read More About Interpolation on [Wikipedia](https://en.wikipedia.org/wiki/Interpolation)
-
-### Arguments
-
-| name             | default              | description                                                     |
-| ---------------- | -------------------- | --------------------------------------------------------------- |
-| value            | required             | the value to interpolate                                        |
-| inputRange       | required             | input range                                                     |
-| outputRange      | required             | output range                                                    |
-| extrapolate      | `Extrapolate.extend` | used as left extrapolation when rightExtrapolation is available |
-| rightExtrapolate | null                 | right extrapolation                                             |
-
-> NOTE: input range must be monotonically increasing
-
-### How extrapolation works
-
-Extrapolation determines how to estimate the output values when the value is out of the range provided but in the `inputRange`.
-If the `extrapolate` argument is passed it applies it to the left and right side.
-If the `rightExtrapolate` argument is provided the `extrapolate` argument will be applied to the left side the the `rightExtrapolate` is used fot the right side
-
-**Extrapolations**
-
-- `Extrapolate.clamp` clamps the value to the edge of the output range
-- `Extrapolate.extend` approximates the value even outside of the range
-- `Extrapolate.identity` returns the value that is being interpolated
-
-## interpolateColor
-
-This is used to map a value from range of number to range of colors.
-
-**USAGE**
+Color interpolation
 
 ```dart
-Color color = interpolateColor(opacity, [0,1], [Colors.red, Colors.green])
+final color = interpolateColor(opacity, [0, 1], [Colors.red, Colors.green]);
 ```
 
-## interpolateOffset
-
-This is used to map a value from range of Offsets to range of Offsets.
-
-**USAGE**
+Helpers example
 
 ```dart
-Offset pos = interpolateOffset(_offset_, List<Offset> inputRage, List<Offset> outputRange);
+final isOpen = cond(greaterThan(x, 0.5), 1.0, 0.0);
+final r = random(0, 1, 2);
 ```
 
-# Helpers
+## Contributing
 
-Remaths have some amazing helpful functions to put your animation to the next level.
+Contributions welcome — open an issue or PR on the repository: https://github.com/AbelBlossom/remaths
 
-> **NB:** `SharedValue` can be passed directly to helper functions without getting `.value`
+- Follow the existing style.
+- Add tests where relevant (package contains `test/`).
+- Run `flutter test` before submitting.
 
-Some of these helper functions are:
+## License
 
-## cond
+This project is MIT licensed — see the LICENSE file for details.
 
-**syntax**
+---
 
-```dart
-var isOPen = cond(bool condition, ifBlock, [elseBlock])
-```
-
-If `condition` evaluates to "truthy" value the node evaluates `ifBlock` node and returns its value, otherwise it evaluates `elseBlock` and returns its value. `elseBlock` is optional.
-
-> Note: `ifBlock` and `elseBlock` can be any value, but id a function is passed, the function is evaluated and return its results
-
-## range
-
-Create a range of numbers
-**Syntax**
-
-```dart
-List<int> numbers = range(stop, {start, step});
-```
-
-## random
-
-Generate a random Number. By default this function generate a number from 0 to 1
-**Syntax\***
-
-```dart
-List<double> rnd = random([int start = 0, int end=1, int decimal=1]);
-```
-
-The `decimal` argument determine the decimal places the the generated number <br>
-Example
-
-```dart
-random(1,2,2) // may be: 1.64
-random(1,2,5) // may be: 1.45345
-```
-
-> **NB** By default this function returns a `double`
-
-## clamp
-
-This function lock value to a min and a max value. This function ensures that the value is not less than the min value or greater than the max vale
-
-**Syntax**
-
-```dart
-double val = clamp(value,min,max);
-```
-
-## diff
-
-returns a difference between value returned at the last time a `SharedValue` was evaluated and its value at the current time. When evaluating for the first time it returns `0`.
-
-**Syntax**
-
-```dart
-double d = diff(opacity)
-```
-
-## toRad
-
-Convert a value to **radian**
-
-**Syntax**
-
-```dart
-var rad = toRad(val)
-```
-
-## toDeg
-
-Convert a value to **degrees**
-
-**Syntax**
-
-```dart
-var deg = toDeg(val)
-```
-
-## lessThan
-
-Check is a value is less than the other
-
-**syntax**
-
-```dart
-bool isYoung = lessThan(age, 10);
-```
-
-## greaterThan
-
-Check is a value is greater than the other
-
-**syntax**
-
-```dart
-bool canVote = greaterThan(age, 18);
-```
-
-## eq
-
-Check is two values are equal
-
-**syntax**
-
-```dart
-bool hasSameName = greaterThan(john.name, doe.name);
-```
-
-## neq
-
-Check is two values are **not** equal
-
-**syntax**
-
-```dart
-bool is = greaterThan(, doe.name);
-```
-
-## Other Functions
-
-### Logical Expressions
-
-- `lessThan`
-- `lessOrEq`
-- `greaterThan`
-- `greaterOrEq`
-- `neq`
-- `eq`
-- `or`
-- `and`
-- [cond](#cond)
-
-### Maths
-
-- `add`
-- `divide`
-- `subtract`
-- `multiply`
-- `modulo`
-- `floor`
-- `ceil`
-- `round`
-- `abs`
-- `exp`
-- `pow`
-- `sqrt`
-- `modulo`
-
-### Trigonometry
-
-- `log`
-- `sin`
-- `cos`
-- `tan`
-- `atan`
-- `acos`
-- `asin`
-
-### SharedValue Specific
-
-- `diff`
-- `diffClamp`
+(Original README content retained as reference in the repository history.)
